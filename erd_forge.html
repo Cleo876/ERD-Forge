@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERD Forge - SQL to Entity Relationship Diagram</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Base styles */
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2c2c2c; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #777; }
+
+        /* Splash Screen */
+        #splash-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #1a1a1a;
+            display: flex; justify-content: center; align-items: center;
+            z-index: 10000;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .splash-content { text-align: center; animation: fadeInUp 1s ease-out; }
+        .splash-logo {
+            font-family: 'Inter', sans-serif;
+            font-size: 4rem; font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem; letter-spacing: 2px;
+        }
+        .splash-tagline { font-size: 1.2rem; color: #888; opacity: 0; animation: fadeIn 1s ease-out 0.5s forwards; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* App container */
+        #app-container { opacity: 0; display: flex; width: 100%; height: 100%; transition: opacity 0.5s ease-in-out; }
+
+        /* Input textarea */
+        textarea {
+            background-color: #2a2a2e; color: #e0e0e0;
+            border: 1px solid #444; font-family: 'Fira Code', monospace;
+            resize: vertical;
+        }
+
+        /* Canvas styles */
+        #canvas-container { cursor: grab; }
+        #canvas-container:active { cursor: grabbing; }
+        .grid-pattern { stroke: #333; stroke-width: 0.5; }
+
+        /* Chen Notation ERD Styles */
+        .entity {
+            fill: #2a2a2e;
+            stroke: #667eea;
+            stroke-width: 2;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+        .entity-name {
+            font-size: 14px;
+            font-weight: bold;
+            fill: white;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .attribute {
+            fill: #2a2a2e;
+            stroke: #764ba2;
+            stroke-width: 1.5;
+        }
+        .attribute-text {
+            font-size: 12px;
+            fill: #e0e0e0;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .pk-text {
+            text-decoration: underline;
+        }
+        /* IMPROVED: Better relationship colors - amber/gold theme */
+        .relationship {
+            fill: #2a2119; /* Dark amber fill */
+            stroke: #f59e0b; /* Amber-Gold stroke */
+            stroke-width: 2.5;
+            filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.3));
+        }
+        .relationship-text {
+            font-size: 13px;
+            fill: #fef3c7; /* Light amber for text */
+            text-anchor: middle;
+            dominant-baseline: middle;
+            font-style: italic;
+            font-weight: 500;
+            pointer-events: none;
+        }
+        .connection-line {
+            stroke: #888;
+            stroke-width: 1.5;
+            pointer-events: none;
+        }
+        .cardinality-text {
+            fill: #ddd;
+            font-size: 14px;
+            font-weight: bold;
+            text-anchor: middle;
+            paint-order: stroke;
+            stroke: #1a1a1a;
+            stroke-width: 3px;
+            stroke-linecap: butt;
+            stroke-linejoin: miter;
+            pointer-events: none;
+        }
+        .draggable {
+            cursor: move;
+        }
+        .dragging .entity {
+            stroke: #f59e0b;
+            stroke-width: 3px;
+            filter: drop-shadow(0 0 12px #f59e0b);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .offline-indicator {
+            position: relative;
+        }
+        .offline-indicator::after {
+            content: "⚠️";
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 12px;
+        }
+        /* Weak entity styles */
+        .weak-entity {
+            fill: #2a2a2e;
+            stroke: #f59e0b;
+            stroke-width: 2;
+            stroke-dasharray: 5, 3;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+        .weak-entity-diamond {
+            fill: #2a2119;
+            stroke: #f59e0b;
+            stroke-width: 2;
+        }
+    </style>
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <div class="splash-content">
+            <div class="splash-logo">{ERD Forge}</div>
+            <div class="splash-tagline">Visualize SQL Schemas with Precision</div>
+        </div>
+    </div>
+
+    <!-- Main Application Container -->
+    <div id="app-container">
+        <!-- Left Column: Controls & Input -->
+        <aside class="w-[30%] h-full flex flex-col p-4 bg-[#212121] shadow-lg overflow-y-auto">
+            <h1 class="text-xl font-bold text-white mb-4">ERD Forge</h1>
+            
+            <label for="sqlCode" class="text-sm font-medium mb-1 text-gray-300">SQL Schema</label>
+            <textarea id="sqlCode" class="w-full flex-grow p-2 border rounded-md text-sm shadow-inner min-h-[200px]">
+-- A more complex schema to test the layout
+CREATE TABLE EMPLOYEE (
+    Fname VARCHAR(15) NOT NULL,
+    Lname VARCHAR(15) NOT NULL,
+    Ssn CHAR(9) PRIMARY KEY,
+    Bdate DATE,
+    Address VARCHAR(30),
+    Sex CHAR,
+    Salary DECIMAL(10,2),
+    Super_ssn CHAR(9),
+    Dno INT NOT NULL,
+    FOREIGN KEY (Super_ssn) REFERENCES EMPLOYEE(Ssn)
+);
+
+CREATE TABLE DEPARTMENT (
+    Dname VARCHAR(15) NOT NULL,
+    Dnumber INT PRIMARY KEY,
+    Mgr_ssn CHAR(9),
+    Mgr_start_date DATE,
+    FOREIGN KEY (Mgr_ssn) REFERENCES EMPLOYEE(Ssn)
+);
+
+ALTER TABLE EMPLOYEE ADD FOREIGN KEY (Dno) REFERENCES DEPARTMENT(Dnumber);
+
+CREATE TABLE PROJECT (
+    Pname VARCHAR(15) NOT NULL,
+    Pnumber INT PRIMARY KEY,
+    Plocation VARCHAR(15),
+    Dnum INT NOT NULL,
+    FOREIGN KEY (Dnum) REFERENCES DEPARTMENT(Dnumber)
+);
+
+CREATE TABLE WORKS_ON (
+    Essn CHAR(9) NOT NULL,
+    Pno INT NOT NULL,
+    Hours DECIMAL(3,1),
+    PRIMARY KEY (Essn, Pno),
+    FOREIGN KEY (Essn) REFERENCES EMPLOYEE(Ssn),
+    FOREIGN KEY (Pno) REFERENCES PROJECT(Pnumber)
+);
+            </textarea>
+
+            <button id="generateBtn" class="mt-4 w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 active:bg-blue-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md">
+                Generate ERD
+            </button>
+            <div class="flex gap-2 mt-4">
+                <button id="downloadPngBtn" class="flex-1 border border-blue-600 text-blue-600 py-2 rounded-md hover:bg-blue-600 hover:text-white active:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md">
+                    <i class="fas fa-download mr-2"></i>Download PNG
+                </button>
+                <button id="printPdfBtn" class="flex-1 border border-blue-600 text-blue-600 py-2 rounded-md hover:bg-blue-600 hover:text-white active:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-md">
+                    <i class="fas fa-print mr-2"></i>Save as PDF
+                </button>
+            </div>
+            <button id="resetViewBtn" class="mt-2 w-full border border-gray-600 text-gray-300 py-2 rounded-md hover:bg-gray-700 hover:text-white transition-colors">
+                Reset View
+            </button>
+            
+            <div class="mt-auto pt-4">
+                <div class="p-3 bg-gray-800 rounded-md">
+                    <h3 class="text-sm font-medium text-gray-300 mb-2">Legend</h3>
+                    <div class="flex items-center mb-1">
+                       <svg width="16" height="12" class="mr-2"><text y="10" class="attribute-text pk-text">PK</text></svg>
+                        <span class="text-xs text-gray-300">Primary Key (Underlined)</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <svg width="20" height="20" class="mr-2">
+                            <rect x="2" y="2" width="16" height="16" class="weak-entity"/>
+                        </svg>
+                        <span class="text-xs text-gray-300">Weak Entity (Dashed)</span>
+                    </div>
+                </div>
+                <p id="elementCount" class="text-xs text-gray-500 mt-2 text-center"></p>
+            </div>
+        </aside>
+
+        <!-- Right Column: ERD Canvas -->
+        <main id="canvas-container" class="w-[70%] h-full bg-[#1a1a1a] overflow-hidden relative">
+            <svg id="canvas" width="100%" height="100%"></svg>
+            <div id="statusIndicator" class="hidden absolute top-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-4 py-2 rounded-md transition-opacity duration-300"></div>
+            <div class="absolute top-2 right-2 text-xs text-gray-500 p-2 bg-[#212121] rounded-md" title="Shortcuts: Ctrl+Enter (Generate), Ctrl+S (Download), Ctrl+P (Print)">
+                Zoom: Wheel, Pan: Drag
+            </div>
+        </main>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const splashScreen = document.getElementById('splash-screen');
+        const appContainer = document.getElementById('app-container');
+        setTimeout(() => {
+            splashScreen.style.opacity = '0';
+            setTimeout(() => {
+                splashScreen.style.display = 'none';
+                appContainer.style.opacity = '1';
+                initializeMainApplication();
+            }, 500);
+        }, 2000);
+    });
+
+    function initializeMainApplication() {
+        const sqlCodeEl = document.getElementById('sqlCode');
+        const generateBtn = document.getElementById('generateBtn');
+        const downloadPngBtn = document.getElementById('downloadPngBtn');
+        const printPdfBtn = document.getElementById('printPdfBtn');
+        const resetViewBtn = document.getElementById('resetViewBtn');
+        const canvas = document.getElementById('canvas');
+        const canvasContainer = document.getElementById('canvas-container');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const elementCountEl = document.getElementById('elementCount');
+
+        let viewTransform = { x: 0, y: 0, k: 1 };
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+        let erdData = { tables: [], relationships: [] };
+        let layout = {};
+        let draggedElement = null;
+
+        const ATTR_RX = 70, ATTR_RY = 20;
+        const REL_DIAMOND_WIDTH = 120, REL_DIAMOND_HEIGHT = 50;
+        
+        function showStatus(message, isError = false) {
+            statusIndicator.textContent = message;
+            statusIndicator.className = `absolute top-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black bg-opacity-50 px-4 py-2 rounded-md ${isError ? 'text-red-400' : 'text-green-400'}`;
+            statusIndicator.classList.remove('hidden');
+            setTimeout(() => statusIndicator.classList.add('hidden'), 3000);
+        }
+
+        function parseSQL(sql) {
+            const tables = [];
+            const tableMap = new Map();
+            const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([\s\S]+?)\);/gi;
+            let match;
+
+            while ((match = createTableRegex.exec(sql)) !== null) {
+                const tableName = match[1];
+                const content = match[2];
+                const table = { name: tableName, columns: [], primaryKeys: [], foreignKeys: [], uniqueKeys: [] };
+                const lines = content.split('\n').map(line => line.trim().replace(/,$/, '')).filter(Boolean);
+
+                lines.forEach(line => {
+                    line = line.toLowerCase();
+                    const pkMatch = line.match(/(?:constraint\s+\w+\s+)?primary\s+key\s*\((.+)\)/);
+                    const fkMatch = line.match(/(?:constraint\s+\w+\s+)?foreign\s+key\s*\(`?(\w+)`?\)\s+references\s+`?(\w+)`?\s*\(`?(\w+)`?\)/);
+                    const uniqueMatch = line.match(/(?:constraint\s+\w+\s+)?unique\s+(?:key|index)?\s*`?\w*`?\s*\((.+)\)/);
+
+                    if (pkMatch) {
+                        table.primaryKeys.push(...pkMatch[1].split(',').map(k => k.trim().replace(/`/g, '')));
+                    } else if (fkMatch) {
+                        table.foreignKeys.push({ column: fkMatch[1], refTable: fkMatch[2], refColumn: fkMatch[3] });
+                    } else if (uniqueMatch) {
+                        table.uniqueKeys.push(...uniqueMatch[1].split(',').map(k => k.trim().replace(/`/g, '')));
+                    } else if (!line.startsWith('key ') && !line.startsWith('constraint')) {
+                        const parts = line.split(/\s+/);
+                        const columnName = parts[0].replace(/`/g, '');
+                        if (columnName) {
+                            table.columns.push({ name: columnName, type: parts[1] || '' });
+                            if (line.includes('primary key')) table.primaryKeys.push(columnName);
+                        }
+                    }
+                });
+                tables.push(table);
+                tableMap.set(table.name.toLowerCase(), table);
+            }
+
+            const alterTableRegex = /ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(?:CONSTRAINT\s+\w+\s+)?FOREIGN\s+KEY\s*\(`?(\w+)`?\)\s+REFERENCES\s+`?(\w+)`?\s*\(`?(\w+)`?\)/gi;
+            while ((match = alterTableRegex.exec(sql)) !== null) {
+                const tableName = match[1].toLowerCase();
+                const column = match[2];
+                const refTable = match[3];
+                const refColumn = match[4];
+                if (tableMap.has(tableName)) {
+                    tableMap.get(tableName).foreignKeys.push({ column, refTable, refColumn });
+                }
+            }
+            return tables;
+        }
+
+        function improvedRelationshipAnalysis(tables) {
+            const relationships = [];
+            const junctionTables = new Set();
+            const foreignKeyColumns = new Set(tables.flatMap(t => t.foreignKeys.map(fk => fk.column)));
+
+            tables.forEach(table => {
+                const isJunction = table.foreignKeys.length >= 2 &&
+                    table.primaryKeys.length >= 2 &&
+                    table.primaryKeys.every(pk => foreignKeyColumns.has(pk)) &&
+                    table.columns.length <= 6;
+
+                if (isJunction) {
+                    junctionTables.add(table.name.toLowerCase());
+                    for (let i = 0; i < table.foreignKeys.length; i++) {
+                        for (let j = i + 1; j < table.foreignKeys.length; j++) {
+                            const fk1 = table.foreignKeys[i];
+                            const fk2 = table.foreignKeys[j];
+                             relationships.push({
+                                type: 'many-to-many',
+                                table1: fk1.refTable,
+                                table2: fk2.refTable,
+                                name: table.name
+                            });
+                        }
+                    }
+                }
+            });
+
+            tables.forEach(table => {
+                if (junctionTables.has(table.name.toLowerCase())) return;
+                table.foreignKeys.forEach(fk => {
+                    const isDuplicateMN = relationships.some(rel =>
+                        rel.type === 'many-to-many' &&
+                        ((rel.table1.toLowerCase() === table.name.toLowerCase() && rel.table2.toLowerCase() === fk.refTable.toLowerCase()) ||
+                         (rel.table2.toLowerCase() === table.name.toLowerCase() && rel.table1.toLowerCase() === fk.refTable.toLowerCase()))
+                    );
+                    if (isDuplicateMN) return;
+
+                    const isOneToOne = table.uniqueKeys.includes(fk.column);
+                    relationships.push({
+                        type: isOneToOne ? 'one-to-one' : 'one-to-many',
+                        table1: fk.refTable,
+                        table2: table.name,
+                        name: `${fk.refTable}_${table.name}`
+                    });
+                });
+            });
+            return { relationships, junctionTables };
+        }
+        
+        // --- LAYOUT ALGORITHMS ---
+        function reliableAttributePlacement(entityPos, attributes) {
+            const positions = {};
+            const count = attributes.length;
+            if (count === 0) return positions;
+            const baseRadius = Math.max(entityPos.width, entityPos.height) / 2 + ATTR_RX + 30;
+            const angleStep = (2 * Math.PI) / count;
+            attributes.forEach((attr, i) => {
+                const angle = i * angleStep;
+                positions[attr.name] = {
+                    x: entityPos.x + baseRadius * Math.cos(angle),
+                    y: entityPos.y + baseRadius * Math.sin(angle)
+                };
+            });
+            return positions;
+        }
+
+        function workingLayout(tables, relationships) {
+            console.log('🔧 Starting working layout algorithm');
+            if (!tables || !Array.isArray(tables) || tables.length === 0) {
+                console.error('Invalid tables input');
+                return {};
+            }
+
+            const positions = {};
+            const entityCount = tables.length;
+            
+            const cols = Math.ceil(Math.sqrt(entityCount));
+            const entitySpacing = 450;
+            
+            tables.forEach((table, index) => {
+                const row = Math.floor(index / cols);
+                const col = index % cols;
+                
+                const entityId = table.name.toLowerCase();
+                positions[entityId] = {
+                    x: col * entitySpacing + 300,
+                    y: row * entitySpacing + 200,
+                    width: table.width,
+                    height: table.height,
+                    isRelationship: false
+                };
+                
+                positions[entityId].attributes = reliableAttributePlacement(
+                    positions[entityId], 
+                    table.columns
+                );
+            });
+
+            relationships.forEach(rel => {
+                const entity1Pos = positions[rel.table1.toLowerCase()];
+                const entity2Pos = positions[rel.table2.toLowerCase()];
+                const relId = rel.name.toLowerCase();
+                
+                if (entity1Pos && entity2Pos) {
+                    positions[relId] = {
+                        x: (entity1Pos.x + entity2Pos.x) / 2,
+                        y: (entity1Pos.y + entity2Pos.y) / 2,
+                        width: REL_DIAMOND_WIDTH,
+                        height: REL_DIAMOND_HEIGHT,
+                        isRelationship: true
+                    };
+                } else {
+                    positions[relId] = {
+                        x: Math.random() * 500 + 100,
+                        y: Math.random() * 500 + 100,
+                        width: REL_DIAMOND_WIDTH,
+                        height: REL_DIAMOND_HEIGHT,
+                        isRelationship: true
+                    };
+                }
+            });
+
+            console.log('✅ Layout generated successfully');
+            return positions;
+        }
+
+        function addCardinalityLabels(group, rel, pos1, pos2, relPos) {
+            const [card1, card2] = (rel.type === 'one-to-one') ? ['1', '1'] : (rel.type === 'one-to-many') ? ['1', 'N'] : ['M', 'N'];
+            const labelPos1 = { x: pos1.x + (relPos.x - pos1.x) * 0.25, y: pos1.y + (relPos.y - pos1.y) * 0.25 };
+            const labelPos2 = { x: pos2.x + (relPos.x - pos2.x) * 0.25, y: pos2.y + (relPos.y - pos2.y) * 0.25 };
+
+            const card1Text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            card1Text.setAttribute('class', 'cardinality-text');
+            card1Text.setAttribute('x', labelPos1.x); card1Text.setAttribute('y', labelPos1.y);
+            card1Text.textContent = card1;
+            card1Text.dataset.rel = rel.name.toLowerCase();
+            group.appendChild(card1Text);
+            
+            const card2Text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            card2Text.setAttribute('class', 'cardinality-text');
+            card2Text.setAttribute('x', labelPos2.x); card2Text.setAttribute('y', labelPos2.y);
+            card2Text.textContent = card2;
+            card2Text.dataset.rel = rel.name.toLowerCase();
+            group.appendChild(card2Text);
+        }
+
+        function renderAllConnections(group, itemsGroup) {
+            group.innerHTML = '';
+            itemsGroup.querySelectorAll('.cardinality-text').forEach(el => el.remove());
+            
+            erdData.tables.forEach(table => {
+                const tablePos = layout[table.name.toLowerCase()];
+                if (tablePos && tablePos.attributes) {
+                    Object.entries(tablePos.attributes).forEach(([name, attrPos]) => {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('class', 'connection-line');
+                        line.setAttribute('id', `attr-line-${table.name}-${name}`);
+                        line.setAttribute('x1', tablePos.x); line.setAttribute('y1', tablePos.y);
+                        line.setAttribute('x2', attrPos.x); line.setAttribute('y2', attrPos.y);
+                        group.appendChild(line);
+                    });
+                }
+            });
+
+            erdData.relationships.forEach(rel => {
+                const relPos = layout[rel.name.toLowerCase()];
+                const entity1Pos = layout[rel.table1.toLowerCase()];
+                const entity2Pos = layout[rel.table2.toLowerCase()];
+                if (relPos && entity1Pos && entity2Pos) {
+                    const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line1.setAttribute('class', 'connection-line');
+                    line1.setAttribute('id', `rel-line-${rel.name}-${rel.table1}`);
+                    line1.setAttribute('x1', entity1Pos.x); line1.setAttribute('y1', entity1Pos.y);
+                    line1.setAttribute('x2', relPos.x); line1.setAttribute('y2', relPos.y);
+                    group.appendChild(line1);
+
+                    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line2.setAttribute('class', 'connection-line');
+                    line2.setAttribute('id', `rel-line-${rel.name}-${rel.table2}`);
+                    line2.setAttribute('x1', entity2Pos.x); line2.setAttribute('y1', entity2Pos.y);
+                    line2.setAttribute('x2', relPos.x); line2.setAttribute('y2', relPos.y);
+                    group.appendChild(line2);
+
+                    addCardinalityLabels(itemsGroup, rel, entity1Pos, entity2Pos, relPos);
+                }
+            });
+        }
+        
+        // IMPROVED: Better relationship rendering with proper sizing
+        function renderRelationship(rel, relPos, group) {
+            const relGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            relGroup.setAttribute('id', `rel-group-${rel.name}`);
+            
+            // Calculate text dimensions to ensure diamond is large enough
+            const textMeasure = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            textMeasure.textContent = rel.name;
+            textMeasure.setAttribute('font-size', '13px');
+            textMeasure.setAttribute('font-family', 'Inter, sans-serif');
+            textMeasure.setAttribute('font-style', 'italic');
+            document.body.appendChild(textMeasure);
+            const textBBox = textMeasure.getBBox();
+            document.body.removeChild(textMeasure);
+            
+            // Ensure diamond is larger than text with proper padding
+            const textWidth = textBBox.width;
+            const textHeight = textBBox.height;
+            const minDiamondWidth = Math.max(REL_DIAMOND_WIDTH, textWidth + 40);
+            const minDiamondHeight = Math.max(REL_DIAMOND_HEIGHT, textHeight + 30);
+            
+            const diamond = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            diamond.setAttribute('class', 'relationship');
+            const points = `0,${-minDiamondHeight/2} ${minDiamondWidth/2},0 0,${minDiamondHeight/2} ${-minDiamondWidth/2},0`;
+            diamond.setAttribute('points', points);
+            relGroup.appendChild(diamond);
+            
+            const relText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            relText.setAttribute('class', 'relationship-text');
+            relText.setAttribute('x', 0); 
+            relText.setAttribute('y', 0);
+            relText.setAttribute('dy', '0.35em'); // Better vertical alignment
+            relText.textContent = rel.name;
+            relGroup.appendChild(relText);
+            
+            relGroup.setAttribute('transform', `translate(${relPos.x}, ${relPos.y})`);
+            group.appendChild(relGroup);
+            
+            // Update layout with actual dimensions
+            relPos.width = minDiamondWidth;
+            relPos.height = minDiamondHeight;
+        }
+
+        // IMPROVED: Weak entity rendering with proper diamond containment
+        function renderWeakEntity(table, tablePos, group) {
+            const entityGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            entityGroup.setAttribute('id', `group-${table.name}`);
+            entityGroup.setAttribute('class', 'draggable');
+            
+            entityGroup.addEventListener('mousedown', (e) => startDrag(e, table.name.toLowerCase()));
+
+            // Calculate diamond size based on text content
+            const textMeasure = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            textMeasure.textContent = table.name;
+            textMeasure.setAttribute('font-size', '14px');
+            textMeasure.setAttribute('font-weight', 'bold');
+            textMeasure.setAttribute('font-family', 'Inter, sans-serif');
+            document.body.appendChild(textMeasure);
+            const textBBox = textMeasure.getBBox();
+            document.body.removeChild(textMeasure);
+            
+            const diamondSize = Math.max(80, textBBox.width + 40, textBBox.height + 30);
+            
+            // Ensure entity rectangle contains the diamond with padding
+            const entityWidth = Math.max(table.width, diamondSize + 40);
+            const entityHeight = Math.max(table.height, diamondSize + 40);
+            
+            const entity = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            entity.setAttribute('class', 'weak-entity');
+            entity.setAttribute('x', -entityWidth/2); 
+            entity.setAttribute('y', -entityHeight/2);
+            entity.setAttribute('width', entityWidth); 
+            entity.setAttribute('height', entityHeight);
+            entity.setAttribute('rx', 15);
+            entityGroup.appendChild(entity);
+
+            // Add inner diamond for weak entity
+            const innerDiamond = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            innerDiamond.setAttribute('class', 'weak-entity-diamond');
+            const diamondPoints = `0,${-diamondSize/3} ${diamondSize/3},0 0,${diamondSize/3} ${-diamondSize/3},0`;
+            innerDiamond.setAttribute('points', diamondPoints);
+            entityGroup.appendChild(innerDiamond);
+
+            const entityText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            entityText.setAttribute('class', 'entity-name');
+            entityText.setAttribute('x', 0); 
+            entityText.setAttribute('y', 0);
+            entityText.setAttribute('dy', '0.35em');
+            entityText.textContent = table.name;
+            entityGroup.appendChild(entityText);
+            
+            entityGroup.setAttribute('transform', `translate(${tablePos.x}, ${tablePos.y})`);
+            group.appendChild(entityGroup);
+
+            // Update table dimensions
+            table.width = entityWidth;
+            table.height = entityHeight;
+            tablePos.width = entityWidth;
+            tablePos.height = entityHeight;
+
+            return entityGroup;
+        }
+
+        function renderAllItems(group) {
+            group.innerHTML = ''; // Clear previous items
+
+            erdData.tables.forEach(table => {
+                const tableId = table.name.toLowerCase();
+                const tablePos = layout[tableId];
+                if (!tablePos) return;
+
+                // Check if this is a weak entity (has foreign keys but no independent primary key)
+                const isWeakEntity = table.foreignKeys.length > 0 && 
+                    table.primaryKeys.some(pk => 
+                        table.foreignKeys.some(fk => fk.column === pk)
+                    );
+
+                if (isWeakEntity) {
+                    renderWeakEntity(table, tablePos, group);
+                } else {
+                    const entityGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    entityGroup.setAttribute('id', `group-${table.name}`);
+                    entityGroup.setAttribute('class', 'draggable');
+                    
+                    entityGroup.addEventListener('mousedown', (e) => startDrag(e, tableId));
+
+                    const entity = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    entity.setAttribute('class', 'entity');
+                    entity.setAttribute('x', -table.width/2); 
+                    entity.setAttribute('y', -table.height/2);
+                    entity.setAttribute('width', table.width); 
+                    entity.setAttribute('height', table.height);
+                    entity.setAttribute('rx', 15);
+                    entityGroup.appendChild(entity);
+
+                    const entityText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    entityText.setAttribute('class', 'entity-name');
+                    entityText.setAttribute('x', 0); 
+                    entityText.setAttribute('y', 0);
+                    entityText.setAttribute('dy', '0.35em');
+                    entityText.textContent = table.name;
+                    entityGroup.appendChild(entityText);
+                    entityGroup.setAttribute('transform', `translate(${tablePos.x}, ${tablePos.y})`);
+                    group.appendChild(entityGroup);
+                }
+
+                if (tablePos.attributes) {
+                    Object.entries(tablePos.attributes).forEach(([name, attrPos]) => {
+                        const attrGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                        attrGroup.setAttribute('id', `attr-group-${table.name}-${name}`);
+                        
+                        const attr = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+                        attr.setAttribute('class', 'attribute');
+                        attr.setAttribute('cx', 0); attr.setAttribute('cy', 0);
+                        attr.setAttribute('rx', ATTR_RX); attr.setAttribute('ry', ATTR_RY);
+                        attrGroup.appendChild(attr);
+
+                        const attrText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        attrText.setAttribute('class', `attribute-text ${table.primaryKeys.includes(name) ? 'pk-text' : ''}`);
+                        attrText.setAttribute('x', 0); attrText.setAttribute('y', 0);
+                        attrText.setAttribute('dy', '0.35em');
+                        attrText.textContent = name;
+                        attrGroup.appendChild(attrText);
+                        attrGroup.setAttribute('transform', `translate(${attrPos.x}, ${attrPos.y})`);
+                        group.appendChild(attrGroup);
+                    });
+                }
+            });
+
+            erdData.relationships.forEach(rel => {
+                const relId = rel.name.toLowerCase();
+                const relPos = layout[relId];
+                if (!relPos) return;
+                
+                renderRelationship(rel, relPos, group);
+            });
+        }
+        
+        function renderERD() {
+            console.log('🎨 Starting ERD rendering...');
+            try {
+                if (!erdData.tables || !Array.isArray(erdData.tables) || erdData.tables.length === 0) {
+                    showStatus("No tables to display.", true);
+                    return;
+                }
+
+                // Set initial table sizes
+                erdData.tables.forEach(table => {
+                    table.width = Math.max(180, table.name.length * 12 + 60);
+                    table.height = Math.max(80, table.width * 0.5);
+                });
+                console.log('📐 Table sizes calculated');
+
+                layout = workingLayout(erdData.tables, erdData.relationships);
+                
+                if (Object.keys(layout).length === 0) {
+                    throw new Error('Layout generation failed');
+                }
+                console.log('📊 Layout generated with', Object.keys(layout).length, 'elements');
+
+                canvas.innerHTML = '';
+                
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                defs.innerHTML = `<pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" class="grid-pattern"/></pattern>`;
+                canvas.appendChild(defs);
+                
+                const gridRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                gridRect.setAttribute('width', '100%');
+                gridRect.setAttribute('height', '100%');
+                gridRect.setAttribute('fill', 'url(#grid)');
+                canvas.appendChild(gridRect);
+
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.id = 'zoom-group';
+                canvas.appendChild(g);
+
+                const linesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                linesGroup.id = 'lines-group';
+                const itemsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                itemsGroup.id = 'items-group';
+                g.append(linesGroup, itemsGroup);
+                
+                console.log('🖼️ Rendering items...');
+                renderAllItems(itemsGroup);
+                
+                console.log('🔗 Rendering connections...');
+                renderAllConnections(linesGroup, itemsGroup);
+                
+                updateView();
+                console.log('✅ ERD rendering completed successfully');
+
+            } catch (error) {
+                console.error('❌ ERD rendering failed:', error);
+                showStatus(`Rendering failed: ${error.message}`, true);
+                canvas.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ff6b6b" font-size="16">Rendering Error: ${error.message}</text>`;
+            }
+        }
+
+        function updateView() {
+            const g = document.getElementById('zoom-group');
+            if (g) g.setAttribute('transform', `translate(${viewTransform.x}, ${viewTransform.y}) scale(${viewTransform.k})`);
+        }
+
+        function handleZoom(event) {
+            event.preventDefault();
+            const scaleFactor = 1.1;
+            const { offsetX, offsetY, deltaY } = event;
+            const oldScale = viewTransform.k;
+            const newScale = deltaY < 0 ? oldScale * scaleFactor : oldScale / scaleFactor;
+            viewTransform.k = Math.max(0.1, Math.min(5, newScale));
+            viewTransform.x = offsetX - (offsetX - viewTransform.x) * (viewTransform.k / oldScale);
+            viewTransform.y = offsetY - (offsetY - viewTransform.y) * (viewTransform.k / oldScale);
+            updateView();
+        }
+
+        function startPan(event) { 
+            if (event.target.closest('.draggable')) return;
+            if (event.button !== 0) return; 
+            isPanning = true; 
+            canvasContainer.style.cursor = 'grabbing'; 
+            panStart.x = event.clientX - viewTransform.x; 
+            panStart.y = event.clientY - viewTransform.y; 
+        }
+        function doPan(event) { if (!isPanning) return; event.preventDefault(); viewTransform.x = event.clientX - panStart.x; viewTransform.y = event.clientY - panStart.y; updateView(); }
+        function endPan() { isPanning = false; canvasContainer.style.cursor = 'grab'; }
+        
+        function getSVGPoint(event) {
+            const pt = canvas.createSVGPoint();
+            pt.x = event.clientX;
+            pt.y = event.clientY;
+            const CTM = document.getElementById('zoom-group').getScreenCTM();
+            return pt.matrixTransform(CTM.inverse());
+        }
+
+        function startDrag(event, entityId) {
+            if (isPanning) return;
+            event.stopPropagation();
+            const targetGroup = document.getElementById(`group-${erdData.tables.find(t => t.name.toLowerCase() === entityId).name}`);
+            targetGroup.classList.add('dragging');
+
+            const startPos = getSVGPoint(event);
+            const entityPos = layout[entityId];
+
+            draggedElement = {
+                id: entityId,
+                offset: {
+                    x: startPos.x - entityPos.x,
+                    y: startPos.y - entityPos.y
+                }
+            };
+            
+            canvasContainer.addEventListener('mousemove', dragMove);
+            canvasContainer.addEventListener('mouseup', endDrag);
+            canvasContainer.addEventListener('mouseleave', endDrag);
+        }
+
+        function dragMove(event) {
+            if (!draggedElement) return;
+            event.preventDefault();
+
+            const newPos = getSVGPoint(event);
+            const entityPos = layout[draggedElement.id];
+
+            const dx = (newPos.x - draggedElement.offset.x) - entityPos.x;
+            const dy = (newPos.y - draggedElement.offset.y) - entityPos.y;
+
+            entityPos.x += dx;
+            entityPos.y += dy;
+
+            if (entityPos.attributes) {
+                Object.values(entityPos.attributes).forEach(attr => {
+                    attr.x += dx;
+                    attr.y += dy;
+                });
+            }
+            
+            const table = erdData.tables.find(t => t.name.toLowerCase() === draggedElement.id);
+            const entityGroup = document.getElementById(`group-${table.name}`);
+            entityGroup.setAttribute('transform', `translate(${entityPos.x}, ${entityPos.y})`);
+
+            if (entityPos.attributes) {
+                Object.entries(entityPos.attributes).forEach(([name, attrPos]) => {
+                    const attrGroup = document.getElementById(`attr-group-${table.name}-${name}`);
+                    attrGroup.setAttribute('transform', `translate(${attrPos.x}, ${attrPos.y})`);
+                });
+            }
+
+            updateConnectionsFor(draggedElement.id);
+        }
+        
+        function updateConnectionsFor(entityId) {
+            const linesGroup = document.querySelector('#zoom-group > g:first-of-type');
+            const itemsGroup = document.querySelector('#zoom-group > g:last-of-type');
+
+            erdData.relationships.forEach(rel => {
+                if (rel.table1.toLowerCase() !== entityId && rel.table2.toLowerCase() !== entityId) return;
+
+                const relId = rel.name.toLowerCase();
+                const table1Id = rel.table1.toLowerCase();
+                const table2Id = rel.table2.toLowerCase();
+                
+                const relPos = layout[relId];
+                const pos1 = layout[table1Id];
+                const pos2 = layout[table2Id];
+
+                if (!relPos || !pos1 || !pos2) return;
+
+                relPos.x = (pos1.x + pos2.x) / 2;
+                relPos.y = (pos1.y + pos2.y) / 2;
+
+                const relGroup = document.getElementById(`rel-group-${rel.name}`);
+                if (relGroup) relGroup.setAttribute('transform', `translate(${relPos.x}, ${relPos.y})`);
+                
+                const line1 = document.getElementById(`rel-line-${rel.name}-${rel.table1}`);
+                if(line1) {
+                    line1.setAttribute('x1', pos1.x); line1.setAttribute('y1', pos1.y);
+                    line1.setAttribute('x2', relPos.x); line1.setAttribute('y2', relPos.y);
+                }
+
+                const line2 = document.getElementById(`rel-line-${rel.name}-${rel.table2}`);
+                if(line2) {
+                    line2.setAttribute('x1', pos2.x); line2.setAttribute('y1', pos2.y);
+                    line2.setAttribute('x2', relPos.x); line2.setAttribute('y2', relPos.y);
+                }
+                
+                itemsGroup.querySelectorAll(`[data-rel="${relId}"]`).forEach(el => el.remove());
+                addCardinalityLabels(itemsGroup, rel, pos1, pos2, relPos);
+            });
+
+            const table = erdData.tables.find(t => t.name.toLowerCase() === entityId);
+            const tablePos = layout[entityId];
+            if (table && tablePos.attributes) {
+                Object.entries(tablePos.attributes).forEach(([name, attrPos]) => {
+                    const line = document.getElementById(`attr-line-${table.name}-${name}`);
+                    if(line) {
+                       line.setAttribute('x1', tablePos.x); line.setAttribute('y1', tablePos.y);
+                       line.setAttribute('x2', attrPos.x); line.setAttribute('y2', attrPos.y);
+                    }
+                });
+            }
+        }
+
+        function endDrag() {
+            if (draggedElement) {
+                const table = erdData.tables.find(t => t.name.toLowerCase() === draggedElement.id);
+                const targetGroup = document.getElementById(`group-${table.name}`);
+                if(targetGroup) targetGroup.classList.remove('dragging');
+            }
+            draggedElement = null;
+            canvasContainer.removeEventListener('mousemove', dragMove);
+            canvasContainer.removeEventListener('mouseup', endDrag);
+            canvasContainer.removeEventListener('mouseleave', endDrag);
+        }
+
+        function resetView() {
+            viewTransform = { x: 0, y: 0, k: 1 };
+             if (erdData.tables && erdData.tables.length > 0) {
+                 const g = document.getElementById('zoom-group');
+                 if(g) {
+                    const bbox = g.getBBox();
+                    if (bbox.width === 0 || bbox.height === 0) return; // Avoid error on empty diagram
+                    const { clientWidth, clientHeight } = canvasContainer;
+                    const scaleX = clientWidth / (bbox.width + 100);
+                    const scaleY = clientHeight / (bbox.height + 100);
+                    viewTransform.k = Math.min(1, scaleX, scaleY);
+                    viewTransform.x = (clientWidth - bbox.width * viewTransform.k) / 2 - bbox.x * viewTransform.k;
+                    viewTransform.y = (clientHeight - bbox.height * viewTransform.k) / 2 - bbox.y * viewTransform.k;
+                 }
+            }
+            updateView();
+            showStatus("View has been reset.");
+        }
+
+        function mainGenerate() {
+            try {
+                console.log('🚀 Starting ERD generation...');
+                const sql = sqlCodeEl.value;
+                
+                if (!sql.trim()) { 
+                    showStatus("SQL input is empty.", true); 
+                    return; 
+                }
+
+                console.log('📝 Parsing SQL...');
+                const tablesRaw = parseSQL(sql);
+                
+                if (tablesRaw.length === 0) { 
+                    showStatus("No 'CREATE TABLE' statements found.", true); 
+                    elementCountEl.textContent = '0 tables, 0 relationships.'; 
+                    canvas.innerHTML = ''; 
+                    return; 
+                }
+
+                console.log('🔍 Analyzing relationships...');
+                const { relationships: allRelationships, junctionTables } = improvedRelationshipAnalysis(tablesRaw);
+                const tables = tablesRaw.filter(t => !junctionTables.has(t.name.toLowerCase()));
+                const validTableNames = new Set(tables.map(t => t.name.toLowerCase()));
+                const relationships = allRelationships.filter(r => 
+                    validTableNames.has(r.table1.toLowerCase()) && validTableNames.has(r.table2.toLowerCase())
+                );
+                
+                console.log('📊 Data prepared:', { 
+                    tables: tables.length, 
+                    relationships: relationships.length,
+                    tableNames: tables.map(t => t.name)
+                });
+
+                erdData = { tables, relationships };
+                
+                console.log('🎨 Rendering ERD...');
+                renderERD();
+                
+                elementCountEl.textContent = `${tables.length} entities, ${relationships.length} relationships.`;
+                showStatus("ERD generated successfully!");
+                
+                setTimeout(() => {
+                    resetView();
+                }, 100);
+                
+            } catch (error) { 
+                console.error("ERD Generation Error:", error); 
+                showStatus(`Error: ${error.message || 'An unknown error occurred'}`, true); 
+            }
+        }
+        
+        function exportHighQualityPNG() {
+            try {
+                console.log('🖼️ Starting high-quality PNG export...');
+                
+                if (!erdData.tables || erdData.tables.length === 0) {
+                    showStatus("No ERD generated to export", true);
+                    return;
+                }
+
+                const g = document.getElementById('zoom-group');
+                const bbox = g.getBBox();
+                if (bbox.width === 0 || bbox.height === 0) {
+                    showStatus("No visible content to export", true);
+                    return;
+                }
+
+                const targetPPI = 300;
+                const scaleFactor = targetPPI / 96;
+                const padding = 100;
+                const width = (bbox.width + padding * 2) * scaleFactor;
+                const height = (bbox.height + padding * 2) * scaleFactor;
+
+                const tempSVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                tempSVG.setAttribute('width', width);
+                tempSVG.setAttribute('height', height);
+                tempSVG.setAttribute('viewBox', `${bbox.x - padding} ${bbox.y - padding} ${bbox.width + padding * 2} ${bbox.height + padding * 2}`);
+                
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+                // IMPROVED: Updated relationship colors for PNG export
+                style.textContent = `
+                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+                    @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
+                    .entity { fill: #2a2a2e; stroke: #667eea; stroke-width: 3; }
+                    .entity-name { font-size: 16px; font-weight: bold; fill: white; text-anchor: middle; dominant-baseline: middle; font-family: 'Inter', sans-serif; }
+                    .attribute { fill: #2a2a2e; stroke: #764ba2; stroke-width: 2; }
+                    .attribute-text { font-size: 14px; fill: #e0e0e0; text-anchor: middle; dominant-baseline: middle; font-family: 'Fira Code', monospace; }
+                    .pk-text { text-decoration: underline; }
+                    .relationship { fill: #2a2119; stroke: #f59e0b; stroke-width: 3; }
+                    .relationship-text { font-size: 15px; fill: #fef3c7; text-anchor: middle; dominant-baseline: middle; font-style: italic; font-weight: 500; font-family: 'Inter', sans-serif; }
+                    .weak-entity { fill: #2a2a2e; stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 5, 3; }
+                    .weak-entity-diamond { fill: #2a2119; stroke: #f59e0b; stroke-width: 2; }
+                    .connection-line { stroke: #888; stroke-width: 2; }
+                    .cardinality-text { fill: #ddd; font-size: 16px; font-weight: bold; text-anchor: middle; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; font-family: 'Inter', sans-serif; }
+                `;
+                defs.appendChild(style);
+                tempSVG.appendChild(defs);
+
+                const contentClone = g.cloneNode(true);
+                contentClone.removeAttribute('transform');
+                tempSVG.appendChild(contentClone);
+
+                const svgData = new XMLSerializer().serializeToString(tempSVG);
+                const svgUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+
+                const img = new Image();
+                img.onload = function() {
+                    const canvasElement = document.createElement('canvas');
+                    canvasElement.width = width;
+                    canvasElement.height = height;
+                    const ctx = canvasElement.getContext('2d');
+                    
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    
+                    ctx.drawImage(img, 0, 0);
+                    
+                    canvasElement.toBlob(function(blob) {
+                        const pngUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                        a.download = `erd-diagram-${timestamp}.png`;
+                        a.href = pngUrl;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        
+                        URL.revokeObjectURL(pngUrl);
+                        
+                        showStatus("High-quality PNG exported successfully!");
+                        console.log('✅ PNG export completed');
+                    }, 'image/png', 1.0);
+                };
+                
+                img.onerror = function() {
+                    console.error('Failed to load SVG for PNG conversion');
+                    showStatus("Failed to generate PNG", true);
+                };
+                
+                img.src = svgUrl;
+
+            } catch (error) {
+                console.error('PNG export error:', error);
+                showStatus("Failed to export PNG: " + error.message, true);
+            }
+        }
+
+        function checkOnlineStatus() {
+            return navigator.onLine;
+        }
+
+        function showOfflineWarning() {
+            statusIndicator.textContent = "⚠️ Internet connection required for PDF export (fonts & styling)";
+            statusIndicator.className = `absolute top-4 left-1/2 -translate-x-1/2 text-white text-sm bg-yellow-600 bg-opacity-90 px-4 py-2 rounded-md`;
+            statusIndicator.classList.remove('hidden');
+            setTimeout(() => statusIndicator.classList.add('hidden'), 5000);
+        }
+
+        function enhancedPrintToPDF() {
+            try {
+                console.log('📄 Starting enhanced PDF printing...');
+
+                if (!checkOnlineStatus()) {
+                    showOfflineWarning();
+                    return;
+                }
+
+                proceedWithPDFPrinting();
+
+            } catch (error) {
+                console.error('PDF printing initialization error:', error);
+                showStatus("Failed to initialize PDF printing: " + error.message, true);
+            }
+        }
+
+        function proceedWithPDFPrinting() {
+            if (!erdData.tables || erdData.tables.length === 0) {
+                showStatus("No ERD generated to print", true);
+                return;
+            }
+
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                showStatus("Please allow pop-ups for PDF printing", true);
+                return;
+            }
+
+            const g = document.getElementById('zoom-group');
+            const bbox = g.getBBox();
+            
+            if (bbox.width === 0 || bbox.height === 0) {
+                showStatus("No visible content to print", true);
+                printWindow.close();
+                return;
+            }
+
+            const fontFallbackCSS = `
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
+                
+                /* Fallback font stack */
+                .entity-name, .relationship-text, .cardinality-text {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+                }
+                .attribute-text {
+                    font-family: 'Fira Code', 'Courier New', monospace !important;
+                }
+            `;
+
+            const printSVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            const contentClone = g.cloneNode(true);
+            
+            contentClone.removeAttribute('transform');
+            
+            const padding = 80;
+            printSVG.setAttribute('viewBox', `${bbox.x - padding} ${bbox.y - padding} ${bbox.width + padding * 2} ${bbox.height + padding * 2}`);
+            printSVG.setAttribute('width', '100%');
+            printSVG.setAttribute('height', 'auto');
+            
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            // IMPROVED: Updated relationship colors for PDF export
+            style.textContent = fontFallbackCSS + `
+                /* Entity styles */
+                .entity { 
+                    fill: #2a2a2e !important; 
+                    stroke: #667eea !important; 
+                    stroke-width: 2.5 !important;
+                }
+                .entity-name { 
+                    font-size: 15px !important; 
+                    font-weight: bold !important; 
+                    fill: white !important; 
+                    text-anchor: middle !important; 
+                    dominant-baseline: middle !important; 
+                }
+                
+                /* Attribute styles */
+                .attribute { 
+                    fill: #2a2a2e !important; 
+                    stroke: #764ba2 !important; 
+                    stroke-width: 2 !important;
+                }
+                .attribute-text { 
+                    font-size: 13px !important; 
+                    fill: #e0e0e0 !important; 
+                    text-anchor: middle !important; 
+                    dominant-baseline: middle !important;
+                }
+                .pk-text { 
+                    text-decoration: underline !important;
+                }
+                
+                /* IMPROVED: Relationship styles - amber/gold theme */
+                .relationship { 
+                    fill: #2a2119 !important; 
+                    stroke: #f59e0b !important; 
+                    stroke-width: 3 !important;
+                }
+                .relationship-text { 
+                    font-size: 14px !important; 
+                    fill: #fef3c7 !important; 
+                    text-anchor: middle !important; 
+                    dominant-baseline: middle !important; 
+                    font-style: italic !important; 
+                    font-weight: 500 !important;
+                }
+                
+                /* Weak entity styles */
+                .weak-entity { 
+                    fill: #2a2a2e !important; 
+                    stroke: #f59e0b !important; 
+                    stroke-width: 2 !important;
+                    stroke-dasharray: 5, 3 !important;
+                }
+                .weak-entity-diamond { 
+                    fill: #2a2119 !important; 
+                    stroke: #f59e0b !important; 
+                    stroke-width: 2 !important;
+                }
+                
+                /* Connection styles */
+                .connection-line { 
+                    stroke: #666 !important; 
+                    stroke-width: 2 !important;
+                    fill: none !important;
+                }
+                
+                /* Cardinality styles */
+                .cardinality-text { 
+                    fill: #333 !important; 
+                    font-size: 15px !important; 
+                    font-weight: bold !important; 
+                    text-anchor: middle !important; 
+                    paint-order: stroke !important; 
+                    stroke: white !important; 
+                    stroke-width: 4px !important;
+                }
+                
+                /* Remove any filters that might cause issues */
+                .entity, .attribute, .relationship {
+                    filter: none !important;
+                }
+            `;
+            defs.appendChild(style);
+            printSVG.appendChild(defs);
+            printSVG.appendChild(contentClone);
+
+            const printHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>ERD Diagram - Entity Relationship Diagram</title>
+                <meta charset="UTF-8">
+                <style>
+                    ${fontFallbackCSS}
+                    
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
+                    body {
+                        margin: 0;
+                        padding: 40px;
+                        background: white;
+                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        color: #333;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    
+                    .print-container {
+                        max-width: 100%;
+                        margin: 0 auto;
+                        page-break-inside: avoid;
+                    }
+                    
+                    .header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #667eea;
+                        padding-bottom: 20px;
+                    }
+                    
+                    .diagram-title {
+                        font-size: 28px;
+                        font-weight: bold;
+                        color: #2a2a2e;
+                        margin-bottom: 10px;
+                    }
+                    
+                    .export-info {
+                        font-size: 14px;
+                        color: #666;
+                    }
+                    
+                    .diagram-container {
+                        background: white;
+                        border-radius: 8px;
+                        padding: 20px;
+                    }
+                    
+                    svg {
+                        display: block;
+                        margin: 0 auto;
+                        max-width: 100%;
+                        height: auto;
+                        background: white;
+                    }
+                    
+                    .offline-warning {
+                        display: none;
+                        background: #fef3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 12px;
+                        border-radius: 4px;
+                        margin-bottom: 20px;
+                        text-align: center;
+                    }
+                    
+                    /* Print-specific styles */
+                    @media print {
+                        body {
+                            padding: 20px !important;
+                            margin: 0 !important;
+                        }
+                        
+                        .print-container {
+                            max-width: none !important;
+                            margin: 0 !important;
+                        }
+                        
+                        .header {
+                            margin-bottom: 20px !important;
+                            padding-bottom: 15px !important;
+                        }
+                        
+                        .diagram-title {
+                            font-size: 24px !important;
+                        }
+                        
+                        .diagram-container {
+                            padding: 10px !important;
+                            border: none !important;
+                        }
+                        
+                        .offline-warning {
+                            display: none !important;
+                        }
+                        
+                        /* Ensure SVG colors print correctly */
+                        svg * {
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                    }
+                    
+                    /* Ensure dark mode doesn't affect print */
+                    @media (prefers-color-scheme: dark) {
+                        body {
+                            background: white !important;
+                            color: #333 !important;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="print-container">
+                    <div class="offline-warning" id="offlineWarning">
+                        ⚠️ Some fonts may not display correctly offline. For best results, ensure you're connected to the internet.
+                    </div>
+                    <div class="header">
+                        <h1 class="diagram-title">Entity Relationship Diagram</h1>
+                        <div class="export-info">
+                            Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()} | 
+                            ${erdData.tables.length} entities, ${erdData.relationships.length} relationships
+                        </div>
+                    </div>
+                    <div class="diagram-container">
+                        ${printSVG.outerHTML}
+                    </div>
+                </div>
+                
+                <script>
+                    // Check if fonts loaded properly
+                    function checkFontsLoaded() {
+                        setTimeout(() => {
+                            if (!document.fonts || document.fonts.status === 'loaded') {
+                                return;
+                            }
+                            
+                            const testElements = document.querySelectorAll('.entity-name, .attribute-text');
+                            let allFontsLoaded = true;
+                            
+                            testElements.forEach(el => {
+                                const style = window.getComputedStyle(el);
+                                if (style.fontFamily.includes('fallback') || 
+                                    style.fontFamily.includes('monospace') && !style.fontFamily.includes('Fira Code')) {
+                                    allFontsLoaded = false;
+                                }
+                            });
+                            
+                            if (!allFontsLoaded) {
+                                document.getElementById('offlineWarning').style.display = 'block';
+                            }
+                        }, 1000);
+                    }
+                    
+                    // Force print styling and trigger print
+                    setTimeout(() => {
+                        checkFontsLoaded();
+                        
+                        const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
+                        let loadedSheets = 0;
+                        
+                        const checkStylesLoaded = () => {
+                            loadedSheets++;
+                            if (loadedSheets === stylesheets.length) {
+                                triggerPrint();
+                            }
+                        };
+                        
+                        stylesheets.forEach(sheet => {
+                            if (sheet.sheet) {
+                                checkStylesLoaded();
+                            } else {
+                                sheet.onload = checkStylesLoaded;
+                            }
+                        });
+                        
+                        if (stylesheets.length === 0) {
+                            triggerPrint();
+                        }
+                        
+                        function triggerPrint() {
+                            setTimeout(() => {
+                                window.print();
+                                window.onafterprint = function() {
+                                    setTimeout(() => {
+                                        window.close();
+                                    }, 100);
+                                };
+                            }, 500);
+                        }
+                    }, 100);
+                <\/script>
+            </body>
+            </html>`;
+
+            printWindow.document.write(printHTML);
+            printWindow.document.close();
+
+            showStatus("Opening PDF print dialog...");
+        }
+
+        generateBtn.addEventListener('click', mainGenerate);
+        downloadPngBtn.addEventListener('click', exportHighQualityPNG);
+        printPdfBtn.addEventListener('click', enhancedPrintToPDF);
+        resetViewBtn.addEventListener('click', resetView);
+        canvasContainer.addEventListener('wheel', handleZoom);
+        canvasContainer.addEventListener('mousedown', startPan);
+        canvasContainer.addEventListener('mousemove', doPan);
+        canvasContainer.addEventListener('mouseup', endPan);
+        canvasContainer.addEventListener('mouseleave', endPan);
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'TEXTAREA') return;
+            if ((e.ctrlKey || e.metaKey)) {
+                switch(e.key) {
+                    case 'Enter': 
+                        e.preventDefault(); 
+                        mainGenerate(); 
+                        break;
+                    case 's': 
+                        e.preventDefault(); 
+                        exportHighQualityPNG(); 
+                        break;
+                    case 'p': 
+                        e.preventDefault(); 
+                        enhancedPrintToPDF(); 
+                        break;
+                }
+            }
+        });
+        
+        function updatePDFButtonState() {
+            if (!checkOnlineStatus()) {
+                printPdfBtn.disabled = true;
+                printPdfBtn.title = "Internet connection required for PDF export";
+                printPdfBtn.classList.add('offline-indicator');
+            } else {
+                printPdfBtn.disabled = false;
+                printPdfBtn.title = "Save as PDF";
+                printPdfBtn.classList.remove('offline-indicator');
+            }
+        }
+        updatePDFButtonState();
+        window.addEventListener('online', updatePDFButtonState);
+        window.addEventListener('offline', updatePDFButtonState);
+
+        mainGenerate();
+    }
+    </script>
+</body>
+</html>
